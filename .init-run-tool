@@ -1,0 +1,4 @@
+{
+    "command": "npm run dev -- --port <port>",
+    "working_directory": "/home/kavia/workspace/code-generation/noteease-17056-67832a5e/note_ease"
+}
