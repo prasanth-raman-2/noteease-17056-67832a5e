@@ -272,7 +272,6 @@ export default function NoteEase() {
                 placeholder="Title…"
                 value={modalNote.title}
                 onChange={(e) => handleModalChange("title", e.target.value)}
-                autoFocus
                 aria-label="Note title"
                 required
                 style={{ fontWeight: 500, background: "#FAFAFA" }}
