@@ -1,138 +1,363 @@
-import type { MetaFunction } from "@remix-run/node";
+import React, { useState, useRef } from "react";
 
-export const meta: MetaFunction = () => {
-  return [
-    { title: "New Remix App" },
-    { name: "description", content: "Welcome to Remix!" },
+// PUBLIC_INTERFACE
+/**
+ * Main container for the NoteEase app.
+ * Features:
+ *  - Create, edit, delete, search, and categorize notes.
+ *  - Light UI with primary/accent colors.
+ */
+export default function NoteEase() {
+  // State for all notes.
+  const [notes, setNotes] = useState(() => {
+    // Load from localStorage if available for persistence during session
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("noteease-notes");
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    }
+    return [];
+  });
+
+  // State for search/filter
+  const [search, setSearch] = useState("");
+  // Categories the user can assign
+  const defaultCategories = [
+    { label: "Work", color: "#4A90E2" },
+    { label: "Personal", color: "#F5A623" },
+    { label: "Ideas", color: "#7ED957" },
+    { label: "Urgent", color: "#E24A4A" },
   ];
-};
 
-export default function Index() {
+  // Modal/dialog state for creating/editing a note
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editIndex, setEditIndex] = useState(null); // null means "new", else integer index
+  const [modalNote, setModalNote] = useState({ title: "", content: "", categories: [] });
+
+  // Floating add button click handler
+  const openNewModal = () => {
+    setEditIndex(null);
+    setModalNote({ title: "", content: "", categories: [] });
+    setModalOpen(true);
+  };
+
+  // Select a note to view/edit
+  const openEditModal = (idx) => {
+    setEditIndex(idx);
+    setModalNote({ ...notes[idx] });
+    setModalOpen(true);
+  };
+
+  // Delete note handler
+  const handleDelete = (idx) => {
+    if (window.confirm("Are you sure you want to delete this note?")) {
+      const updated = notes.filter((_, i) => i !== idx);
+      setNotes(updated);
+      localStorage.setItem("noteease-notes", JSON.stringify(updated));
+    }
+  };
+
+  // Handle search input
+  const handleSearch = (e) => {
+    setSearch(e.target.value);
+  };
+
+  // Filtered note list
+  const lowerSearch = search.toLowerCase();
+  const filteredNotes = notes.filter(
+    (note) =>
+      note.title.toLowerCase().includes(lowerSearch) ||
+      note.content.toLowerCase().includes(lowerSearch) ||
+      (note.categories &&
+        note.categories.some((cat) => cat.label.toLowerCase().includes(lowerSearch)))
+  );
+
+  // Modal: Save note
+  const saveModalNote = () => {
+    if (!modalNote.title.trim()) {
+      alert("Title is required");
+      return;
+    }
+    const newNotes = [...notes];
+    if (editIndex === null) {
+      // New note
+      newNotes.unshift({
+        ...modalNote,
+        createdAt: new Date().toISOString(),
+        id: Date.now(),
+      });
+    } else {
+      // Edit
+      newNotes[editIndex] = {
+        ...modalNote,
+        modifiedAt: new Date().toISOString(),
+        id: notes[editIndex].id,
+      };
+    }
+    setNotes(newNotes);
+    localStorage.setItem("noteease-notes", JSON.stringify(newNotes));
+    setModalOpen(false);
+    setModalNote({ title: "", content: "", categories: [] });
+    setEditIndex(null);
+  };
+
+  // Modal: change title/content/category
+  const handleModalChange = (field, value) => {
+    setModalNote({ ...modalNote, [field]: value });
+  };
+
+  // Modal: category toggle
+  const handleCategoryToggle = (cat) => {
+    let cats = modalNote.categories || [];
+    if (cats.some((c) => c.label === cat.label)) {
+      cats = cats.filter((c) => c.label !== cat.label);
+    } else {
+      cats = [...cats, cat];
+    }
+    setModalNote({ ...modalNote, categories: cats });
+  };
+
+  // Helper: get snippet from note content
+  function snippet(text) {
+    if (!text) return "";
+    return text.length > 60 ? text.slice(0, 60) + "…" : text;
+  }
+
+  // Persist notes changes to localStorage (for every state update)
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("noteease-notes", JSON.stringify(notes));
+    }
+  }, [notes]);
+
+  // Modal focus management
+  const titleRef = useRef(null);
+  React.useEffect(() => {
+    if (modalOpen && titleRef.current) titleRef.current.focus();
+  }, [modalOpen]);
+
+  /** Render Main Layout **/
   return (
-    <div className="flex h-screen items-center justify-center">
-      <div className="flex flex-col items-center gap-16">
-        <header className="flex flex-col items-center gap-9">
-          <h1 className="leading text-2xl font-bold text-gray-800 dark:text-gray-100">
-            Welcome to <span className="sr-only">Remix</span>
-          </h1>
-          <div className="h-[144px] w-[434px]">
-            <img
-              src="/logo-light.png"
-              alt="Remix"
-              className="block w-full dark:hidden"
-            />
-            <img
-              src="/logo-dark.png"
-              alt="Remix"
-              className="hidden w-full dark:block"
-            />
-          </div>
-        </header>
-        <nav className="flex flex-col items-center justify-center gap-4 rounded-3xl border border-gray-200 p-6 dark:border-gray-700">
-          <p className="leading-6 text-gray-700 dark:text-gray-200">
-            What&apos;s next?
-          </p>
-          <ul>
-            {resources.map(({ href, text, icon }) => (
-              <li key={href}>
-                <a
-                  className="group flex items-center gap-3 self-stretch p-3 leading-normal text-blue-700 hover:underline dark:text-blue-500"
-                  href={href}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {icon}
-                  {text}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
+    <main className="relative min-h-screen bg-[#FFFFFF] pb-24">
+      {/* Header & Search Bar */}
+      <div className="sticky top-0 z-10 flex flex-col gap-2 bg-white shadow-md p-4">
+        <h1 className="text-2xl font-bold text-[#4A90E2] mb-2" style={{ letterSpacing: 1 }}>
+          NoteEase
+        </h1>
+        <input
+          type="text"
+          className="w-full rounded-lg border border-gray-200 px-4 py-2 text-base shadow-inner focus:outline-none focus:ring-2 focus:ring-[#4A90E2]"
+          style={{ background: "#FAFAFA" }}
+          placeholder="Search notes…"
+          value={search}
+          onChange={handleSearch}
+          aria-label="Search notes"
+        />
       </div>
-    </div>
+
+      {/* Notes List */}
+      <div className="mx-auto mt-6 w-full max-w-2xl px-3 grid gap-4">
+        {filteredNotes.length === 0 ? (
+          <div className="text-center text-gray-400 mt-10">No notes found.</div>
+        ) : (
+          filteredNotes.map((note, i) => (
+            <div
+              key={note.id || i}
+              className="group rounded-xl border border-gray-200 bg-white transition hover:shadow-lg cursor-pointer relative"
+              onClick={() => openEditModal(notes.indexOf(note))}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") openEditModal(notes.indexOf(note));
+              }}
+              aria-label={`Open note: ${note.title}`}
+            >
+              {/* Delete icon (appears only on hover) */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete(notes.indexOf(note));
+                }}
+                className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition opacity-100 bg-white text-gray-400 hover:text-red-500 p-1 rounded-full border border-gray-100"
+                aria-label="Delete"
+                tabIndex={-1}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  height="18"
+                  width="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#E24A4A"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                  <line x1="10" y1="11" x2="10" y2="17" />
+                  <line x1="14" y1="11" x2="14" y2="17" />
+                </svg>
+              </button>
+              <div className="p-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <h2 className="font-semibold text-lg text-gray-700 truncate">{note.title}</h2>
+                  {/* Category tags */}
+                  <div className="flex gap-1 flex-wrap">
+                    {(note.categories || []).map((cat) => (
+                      <span
+                        key={cat.label}
+                        className="text-xs px-2 rounded-lg font-medium"
+                        style={{
+                          background: cat.color,
+                          color: "#fff",
+                          filter: "brightness(0.97)",
+                        }}
+                      >
+                        {cat.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="text-gray-500 text-sm">{snippet(note.content)}</div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Floating Action Button */}
+      <button
+        className="fixed z-20 bottom-12 right-8 md:bottom-12 md:right-16 bg-[#4A90E2] hover:bg-[#357ABD] text-white rounded-full p-4 shadow-lg shadow-blue-100 transition-all flex items-center justify-center"
+        aria-label="Add new note"
+        style={{
+          boxShadow: "0 4px 28px #4A90E210",
+          fontSize: 26,
+        }}
+        onClick={openNewModal}
+      >
+        +
+      </button>
+
+      {/* Modal for create/edit note */}
+      {modalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="bg-white rounded-2xl max-w-lg w-[95%] mx-2 shadow-2xl p-6 relative animate-fadeIn">
+            {/* Close button */}
+            <button
+              className="absolute top-2 right-3 text-gray-300 hover:text-gray-500 text-3xl"
+              onClick={() => setModalOpen(false)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <h2 className="font-semibold text-xl mb-4 text-[#4A90E2]">
+              {editIndex === null ? "New Note" : "Edit Note"}
+            </h2>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveModalNote();
+              }}
+            >
+              <input
+                ref={titleRef}
+                type="text"
+                className="w-full mb-3 rounded-lg border border-gray-200 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-[#4A90E2]"
+                placeholder="Title…"
+                value={modalNote.title}
+                onChange={(e) => handleModalChange("title", e.target.value)}
+                autoFocus
+                aria-label="Note title"
+                required
+                style={{ fontWeight: 500, background: "#FAFAFA" }}
+              />
+              <textarea
+                className="w-full mb-3 rounded-lg border border-gray-200 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-[#4A90E2]"
+                placeholder="Your note…"
+                value={modalNote.content}
+                rows={6}
+                onChange={(e) => handleModalChange("content", e.target.value)}
+                aria-label="Note content"
+                style={{ background: "#FAFAFA", fontFamily: "inherit" }}
+              />
+              <div className="mb-5">
+                <span className="block text-xs text-gray-400 mb-2">Categories</span>
+                <div className="flex flex-wrap gap-2">
+                  {defaultCategories.map((cat) => (
+                    <button
+                      type="button"
+                      key={cat.label}
+                      className={`text-xs font-medium px-3 py-1 rounded-lg border border-gray-100 cursor-pointer focus:outline-none ${
+                        (modalNote.categories || []).some((c) => c.label === cat.label)
+                          ? ""
+                          : "opacity-60"
+                      }`}
+                      style={{
+                        background: cat.color,
+                        color: "#fff",
+                        filter:
+                          (modalNote.categories || []).some((c) => c.label === cat.label)
+                            ? "brightness(1.1)"
+                            : "brightness(0.93)",
+                        borderColor:
+                          (modalNote.categories || []).some((c) => c.label === cat.label)
+                            ? "#2222"
+                            : "#ddd8",
+                      }}
+                      tabIndex={0}
+                      aria-pressed={
+                        (modalNote.categories || []).some((c) => c.label === cat.label)
+                          ? "true"
+                          : "false"
+                      }
+                      onClick={() => handleCategoryToggle(cat)}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-end mt-2 gap-2">
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition"
+                  onClick={() => setModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-lg bg-[#4A90E2] hover:bg-[#357ABD] text-white font-medium shadow transition"
+                  style={{
+                    boxShadow: "0 2px 8px #4A90E210",
+                    background: "#4A90E2",
+                  }}
+                >
+                  {editIndex === null ? "Create" : "Save"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Modal animation styles */}
+      <style>
+        {`
+          @keyframes fadeIn {
+            from { opacity: .2; transform: translateY(32px) scale(.98);}
+            to   { opacity: 1; transform: none;}
+          }
+          .animate-fadeIn {
+            animation: fadeIn .22s cubic-bezier(.11,.84,.56,1.1);
+          }
+        `}
+      </style>
+    </main>
   );
 }
-
-const resources = [
-  {
-    href: "https://remix.run/start/quickstart",
-    text: "Quick Start (5 min)",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="20"
-        viewBox="0 0 20 20"
-        fill="none"
-        className="stroke-gray-600 group-hover:stroke-current dark:stroke-gray-300"
-      >
-        <path
-          d="M8.51851 12.0741L7.92592 18L15.6296 9.7037L11.4815 7.33333L12.0741 2L4.37036 10.2963L8.51851 12.0741Z"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-  },
-  {
-    href: "https://remix.run/start/tutorial",
-    text: "Tutorial (30 min)",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="20"
-        viewBox="0 0 20 20"
-        fill="none"
-        className="stroke-gray-600 group-hover:stroke-current dark:stroke-gray-300"
-      >
-        <path
-          d="M4.561 12.749L3.15503 14.1549M3.00811 8.99944H1.01978M3.15503 3.84489L4.561 5.2508M8.3107 1.70923L8.3107 3.69749M13.4655 3.84489L12.0595 5.2508M18.1868 17.0974L16.635 18.6491C16.4636 18.8205 16.1858 18.8205 16.0144 18.6491L13.568 16.2028C13.383 16.0178 13.0784 16.0347 12.915 16.239L11.2697 18.2956C11.047 18.5739 10.6029 18.4847 10.505 18.142L7.85215 8.85711C7.75756 8.52603 8.06365 8.21994 8.39472 8.31453L17.6796 10.9673C18.0223 11.0653 18.1115 11.5094 17.8332 11.7321L15.7766 13.3773C15.5723 13.5408 15.5554 13.8454 15.7404 14.0304L18.1868 16.4767C18.3582 16.6481 18.3582 16.926 18.1868 17.0974Z"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-  },
-  {
-    href: "https://remix.run/docs",
-    text: "Remix Docs",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="20"
-        viewBox="0 0 20 20"
-        fill="none"
-        className="stroke-gray-600 group-hover:stroke-current dark:stroke-gray-300"
-      >
-        <path
-          d="M9.99981 10.0751V9.99992M17.4688 17.4688C15.889 19.0485 11.2645 16.9853 7.13958 12.8604C3.01467 8.73546 0.951405 4.11091 2.53116 2.53116C4.11091 0.951405 8.73546 3.01467 12.8604 7.13958C16.9853 11.2645 19.0485 15.889 17.4688 17.4688ZM2.53132 17.4688C0.951566 15.8891 3.01483 11.2645 7.13974 7.13963C11.2647 3.01471 15.8892 0.951453 17.469 2.53121C19.0487 4.11096 16.9854 8.73551 12.8605 12.8604C8.73562 16.9853 4.11107 19.0486 2.53132 17.4688Z"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-      </svg>
-    ),
-  },
-  {
-    href: "https://rmx.as/discord",
-    text: "Join Discord",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="20"
-        viewBox="0 0 24 20"
-        fill="none"
-        className="stroke-gray-600 group-hover:stroke-current dark:stroke-gray-300"
-      >
-        <path
-          d="M15.0686 1.25995L14.5477 1.17423L14.2913 1.63578C14.1754 1.84439 14.0545 2.08275 13.9422 2.31963C12.6461 2.16488 11.3406 2.16505 10.0445 2.32014C9.92822 2.08178 9.80478 1.84975 9.67412 1.62413L9.41449 1.17584L8.90333 1.25995C7.33547 1.51794 5.80717 1.99419 4.37748 2.66939L4.19 2.75793L4.07461 2.93019C1.23864 7.16437 0.46302 11.3053 0.838165 15.3924L0.868838 15.7266L1.13844 15.9264C2.81818 17.1714 4.68053 18.1233 6.68582 18.719L7.18892 18.8684L7.50166 18.4469C7.96179 17.8268 8.36504 17.1824 8.709 16.4944L8.71099 16.4904C10.8645 17.0471 13.128 17.0485 15.2821 16.4947C15.6261 17.1826 16.0293 17.8269 16.4892 18.4469L16.805 18.8725L17.3116 18.717C19.3056 18.105 21.1876 17.1751 22.8559 15.9238L23.1224 15.724L23.1528 15.3923C23.5873 10.6524 22.3579 6.53306 19.8947 2.90714L19.7759 2.73227L19.5833 2.64518C18.1437 1.99439 16.6386 1.51826 15.0686 1.25995ZM16.6074 10.7755L16.6074 10.7756C16.5934 11.6409 16.0212 12.1444 15.4783 12.1444C14.9297 12.1444 14.3493 11.6173 14.3493 10.7877C14.3493 9.94885 14.9378 9.41192 15.4783 9.41192C16.0471 9.41192 16.6209 9.93851 16.6074 10.7755ZM8.49373 12.1444C7.94513 12.1444 7.36471 11.6173 7.36471 10.7877C7.36471 9.94885 7.95323 9.41192 8.49373 9.41192C9.06038 9.41192 9.63892 9.93712 9.6417 10.7815C9.62517 11.6239 9.05462 12.1444 8.49373 12.1444Z"
-          strokeWidth="1.5"
-        />
-      </svg>
-    ),
-  },
-];
